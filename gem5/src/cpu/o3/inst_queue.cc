@@ -598,7 +598,10 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
     }
 
     ++iqStats.instsAdded;
-
+    if(memDepUnit[new_inst->threadNumber].delayCtrlSpecLoad && new_inst->isCondCtrl())
+    {
+        memDepUnit[new_inst->threadNumber].insertOutstandingBranches(new_inst->seqNum);
+    }
     count[new_inst->threadNumber]++;
 
     assert(freeEntries == (numEntries - countInsts()));
@@ -1000,7 +1003,10 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
         // Completes a non mem ref barrier
         memDepUnit[tid].completeInst(completed_inst);
     }
-
+    if(memDepUnit[tid].delayCtrlSpecLoad && completed_inst->isCondCtrl())
+    {
+        memDepUnit[tid].resolveOutstandingBranches(completed_inst->seqNum);
+    }
     for (int dest_reg_idx = 0;
          dest_reg_idx < completed_inst->numDestRegs();
          dest_reg_idx++)
@@ -1320,6 +1326,9 @@ InstructionQueue::doSquash(ThreadID tid)
         }
         instList[tid].erase(squash_it--);
         ++iqStats.squashedInstsExamined;
+        if(memDepUnit[tid].delayCtrlSpecLoad && squashed_inst->isCondCtrl()){
+            memDepUnit[tid].removeOutstandingBranches(squashed_inst->seqNum);
+        }
     }
 }
 

@@ -192,3 +192,4 @@ class BaseO3CPU(BaseCPU):
         TournamentBP(numThreads=Parent.numThreads), "Branch Predictor"
     )
     needsTSO = Param.Bool(False, "Enable TSO Memory model")
+    delayCtrlSpecLoad = Param.Bool(False, "Enable Naive Approach to Prevent Spectre Attacks")

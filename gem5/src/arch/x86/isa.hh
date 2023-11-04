@@ -61,7 +61,7 @@ class ISA : public BaseISA
 
   public:
     void clear() override;
-
+    bool fuzz_TSC; //rsuresh6
     PCStateBase *
     newPCState(Addr new_inst_addr=0) const override
     {

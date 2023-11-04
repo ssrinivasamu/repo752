@@ -62,6 +62,7 @@ MemDepUnit::MemDepUnit(const BaseO3CPUParams &params)
       stats(nullptr)
 {
     DPRINTF(MemDepUnit, "Creating MemDepUnit object.\n");
+    delayCtrlSpecLoad = true;
 }
 
 MemDepUnit::~MemDepUnit()
@@ -101,6 +102,7 @@ MemDepUnit::init(const BaseO3CPUParams &params, ThreadID tid, CPU *cpu)
 
     std::string stats_group_name = csprintf("MemDepUnit__%i", tid);
     cpu->addStatGroup(stats_group_name.c_str(), &stats);
+    delayCtrlSpecLoad = true;//params.delayCtrlSpecLoad;
 }
 
 MemDepUnit::MemDepUnitStats::MemDepUnitStats(statistics::Group *parent)
@@ -606,28 +608,74 @@ MemDepUnit::moveToReady(MemDepEntryPtr &woken_inst_entry)
 
     assert(!woken_inst_entry->squashed);
 
-    iqPtr->addReadyMemInst(woken_inst_entry->inst);
+    if(UnresolvedOlderBranches(woken_inst_entry->inst->seqNum)){
+        DPRINTF(MemDepUnit, "Has an Unresolved Branch detected %d %d\n", *(outstandingBranches.begin()) , woken_inst_entry->inst->seqNum);
+        woken_inst_entry->inst->setWaitForBranchResolution();
+        return;
+    }
+    else {
+        DPRINTF(MemDepUnit, "Good to go here \n ");
+        iqPtr->addReadyMemInst(woken_inst_entry->inst);
+        woken_inst_entry->inst->clearWaitForBranchResolution();
+
+    }
 }
 
+bool MemDepUnit::UnresolvedOlderBranches(int64_t seq_num) {
+
+    bool olderUnresolvedBranch = false;
+    int64_t oldestBranch = (int64_t) *(outstandingBranches.begin());
+    if (!outstandingBranches.empty() && oldestBranch < seq_num) {
+        olderUnresolvedBranch = true;
+    }
+    return olderUnresolvedBranch;
+}
+
+void MemDepUnit::resolveOutstandingBranches(int64_t seq_num) {
+  DPRINTF(MemDepUnit, "Resolving a branch %d.\n", seq_num);
+  outstandingBranches.erase(seq_num);
+  //dumpLists();
+  for (ThreadID tid = 0; tid < MaxThreads; tid++) {
+    ListIt inst_list_it = instList[tid].begin();
+    while (inst_list_it != instList[tid].end()) {
+        if((*inst_list_it)->readWaitForBranchResolution()) {
+          DPRINTF(MemDepUnit, "Invoking instruction %d.\n", (*inst_list_it)->seqNum);
+          MemDepEntryPtr inst_entry = findInHash(*inst_list_it);
+          moveToReady(inst_entry);
+        }
+        inst_list_it++;
+    }
+  }
+}
+void MemDepUnit::insertOutstandingBranches(uint64_t seq_num) {
+    DPRINTF(MemDepUnit, "Inserting a branch %d.\n", seq_num);
+    outstandingBranches.insert(seq_num);
+}
+
+void MemDepUnit::removeOutstandingBranches(int64_t seq_num) {
+  DPRINTF(MemDepUnit, "Removing a branch %d.\n", seq_num);
+  outstandingBranches.erase(seq_num);
+}
 
 void
 MemDepUnit::dumpLists()
 {
     for (ThreadID tid = 0; tid < MaxThreads; tid++) {
-        cprintf("Instruction list %i size: %i\n",
+        DPRINTF(MemDepUnit, "Instruction list %i size: %i\n",
                 tid, instList[tid].size());
 
         ListIt inst_list_it = instList[tid].begin();
         int num = 0;
 
         while (inst_list_it != instList[tid].end()) {
-            cprintf("Instruction:%i\nPC: %s\n[sn:%llu]\n[tid:%i]\nIssued:%i\n"
-                    "Squashed:%i\n\n",
+            DPRINTF(MemDepUnit, "Instruction:%i\nPC: %s\n[sn:%llu]\n[tid:%i]\nIssued:%i\n"
+                    "Squashed:%i WaitForBR:%d\n\n",
                     num, (*inst_list_it)->pcState(),
                     (*inst_list_it)->seqNum,
                     (*inst_list_it)->threadNumber,
                     (*inst_list_it)->isIssued(),
-                    (*inst_list_it)->isSquashed());
+                    (*inst_list_it)->isSquashed(),
+                    (*inst_list_it)->readWaitForBranchResolution());
             inst_list_it++;
             ++num;
         }

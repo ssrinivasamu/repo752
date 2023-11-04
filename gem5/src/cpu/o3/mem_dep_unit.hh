@@ -93,6 +93,9 @@ class MemDepUnit
     std::string _name;
 
   public:
+    // rsuresh6 - delayCtrlSpecLoad is used to delay the Speculative Loads when there is a unresolved branch instruction
+    bool delayCtrlSpecLoad;
+    
     /** Empty constructor. Must call init() prior to using in this case. */
     MemDepUnit();
 
@@ -161,6 +164,11 @@ class MemDepUnit
     /** Debugging function to dump the lists of instructions. */
     void dumpLists();
 
+
+    void insertOutstandingBranches(uint64_t seq_num);
+    void removeOutstandingBranches(int64_t seq_num);
+    bool UnresolvedOlderBranches(int64_t seq_num);
+    void resolveOutstandingBranches(int64_t seq_num); 
   private:
 
     /** Completes a memory instruction. */
@@ -232,6 +240,9 @@ class MemDepUnit
 
     /** A list of all instructions in the memory dependence unit. */
     std::list<DynInstPtr> instList[MaxThreads];
+
+    // rsuresh -- added Outstanding branches to implement naive approach
+    std::set<uint64_t> outstandingBranches;
 
     /** A list of all instructions that are going to be replayed. */
     std::list<DynInstPtr> instsToReplay;

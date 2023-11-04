@@ -187,6 +187,7 @@ class DynInst : public ExecContext, public RefCounted
         ReqMade,
         MemOpDone,
         HtmFromTransaction,
+        WaitForBranchResolution,
         MaxFlags
     };
 
@@ -381,6 +382,9 @@ class DynInst : public ExecContext, public RefCounted
     bool notAnInst() const { return instFlags[NotAnInst]; }
     void setNotAnInst() { instFlags[NotAnInst] = true; }
 
+    void setWaitForBranchResolution() {instFlags[WaitForBranchResolution] = true; }
+    void clearWaitForBranchResolution() {instFlags[WaitForBranchResolution] = false; }
+    bool readWaitForBranchResolution() {return instFlags[WaitForBranchResolution] == true; }
 
     ////////////////////////////////////////////
     //
