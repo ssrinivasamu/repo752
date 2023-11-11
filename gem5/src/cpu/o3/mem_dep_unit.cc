@@ -59,7 +59,9 @@ MemDepUnit::MemDepUnit(const BaseO3CPUParams &params)
       depPred(params.store_set_clear_period, params.SSITSize,
               params.LFSTSize),
       iqPtr(NULL),
-      stats(nullptr)
+      stats(nullptr),
+      delayCtrlSpecLoad(params.delayCtrlSpecLoad),
+      delayTaintedLoad(params.delayTaintedLoad)
 {
     DPRINTF(MemDepUnit, "Creating MemDepUnit object.\n");
 }
@@ -95,6 +97,8 @@ MemDepUnit::init(const BaseO3CPUParams &params, ThreadID tid, CPU *cpu)
 
     _name = csprintf("%s.memDep%d", params.name, tid);
     id = tid;
+    delayCtrlSpecLoad = params.delayCtrlSpecLoad;
+    delayTaintedLoad = params.delayTaintedLoad;
 
     depPred.init(params.store_set_clear_period, params.SSITSize,
             params.LFSTSize);
@@ -600,43 +604,100 @@ MemDepUnit::findInHash(const DynInstConstPtr &inst)
 
 void
 MemDepUnit::moveToReady(MemDepEntryPtr &woken_inst_entry)
-{
+{   
+    assert(!woken_inst_entry->squashed);
+    //Access the oldest unresolved branch instruction's seqNum in the queue:
+    uint64_t firstElement;
+    std::set<uint64_t>::iterator it = OutstBranch.begin();
+    firstElement = *it;     
+    if (!OutstBranch.empty()) {
+        if(woken_inst_entry->inst->seqNum > firstElement){
+            if(delayCtrlSpecLoad){
+                DPRINTF(MemDepUnit, "Instr [sn:%lli] is later than oldest branch:%i, wait for branch to resolve\n", woken_inst_entry->inst->seqNum, firstElement);
+                woken_inst_entry->inst->setWaitBrResolve();
+                return;
+            }
+            else if(delayTaintedLoad){
+                if(woken_inst_entry->inst->IsInstrTainted()){
+                    woken_inst_entry->inst->setWaitBrResolve();
+                    DPRINTF(MemDepUnit, "Load [sn:%lli] is tainted(%0d), do not issue\n", woken_inst_entry->inst->seqNum, woken_inst_entry->inst->IsInstrTainted());
+                    return;
+                } else {
+                    woken_inst_entry->inst->InstrTaint(true);
+                    DPRINTF(MemDepUnit, "Speculative load [sn:%lli] is not tainted, so allow it to issue. Taint:%0d\n", woken_inst_entry->inst->seqNum, woken_inst_entry->inst->IsInstrTainted());
+                }
+            }
+        }        
+    }
+    woken_inst_entry->inst->clearWaitBrResolve();
     DPRINTF(MemDepUnit, "Adding instruction [sn:%lli] "
             "to the ready list.\n", woken_inst_entry->inst->seqNum);
 
-    assert(!woken_inst_entry->squashed);
-
+    
     iqPtr->addReadyMemInst(woken_inst_entry->inst);
 }
 
+void
+MemDepUnit::BranchInsert(uint64_t seqNum)
+{
+    DPRINTF(MemDepUnit, "Branch inserted [sn:%lli]\n", seqNum);
+    OutstBranch.insert(seqNum);
+}
+
+void
+MemDepUnit::BranchRemove(uint64_t seqNum)
+{
+    DPRINTF(MemDepUnit, "Branch removed [sn:%lli]\n", seqNum);
+    OutstBranch.erase(seqNum);
+}
+
+void 
+MemDepUnit::BranchResolve(uint64_t seqNum)
+{
+    DPRINTF(MemDepUnit, "Branch resolved [sn:%lli]\n", seqNum);
+    dumpLists();
+    BranchRemove(seqNum);
+    for (ThreadID tid = 0; tid < MaxThreads; tid++) {
+        ListIt inst_list_it = instList[tid].begin();
+        while (inst_list_it != instList[tid].end()) {
+            if((*inst_list_it)->IsWaitBrResolve()){
+                MemDepEntryPtr inst_entry = findInHash((*inst_list_it));
+                moveToReady(inst_entry);
+            }
+            inst_list_it++;
+        }
+    }
+    
+}
 
 void
 MemDepUnit::dumpLists()
 {
     for (ThreadID tid = 0; tid < MaxThreads; tid++) {
-        cprintf("Instruction list %i size: %i\n",
+        DPRINTF(MemDepUnit, "Instruction list %i size: %i\n",
                 tid, instList[tid].size());
 
         ListIt inst_list_it = instList[tid].begin();
         int num = 0;
 
         while (inst_list_it != instList[tid].end()) {
-            cprintf("Instruction:%i\nPC: %s\n[sn:%llu]\n[tid:%i]\nIssued:%i\n"
-                    "Squashed:%i\n\n",
+            DPRINTF(MemDepUnit, "Instruction:%i\nPC: %s\n[sn:%llu]\n[tid:%i]\nIssued:%i\n"
+                    "Squashed:%i\nWaitBrResolve:%i\n",
                     num, (*inst_list_it)->pcState(),
                     (*inst_list_it)->seqNum,
                     (*inst_list_it)->threadNumber,
                     (*inst_list_it)->isIssued(),
-                    (*inst_list_it)->isSquashed());
+                    (*inst_list_it)->isSquashed(),
+                    (*inst_list_it)->IsWaitBrResolve());
             inst_list_it++;
             ++num;
         }
     }
 
-    cprintf("Memory dependence hash size: %i\n", memDepHash.size());
+    DPRINTF(MemDepUnit, "Memory dependence hash size: %i\n", memDepHash.size());
 
 #ifdef GEM5_DEBUG
-    cprintf("Memory dependence entries: %i\n", MemDepEntry::memdep_count);
+    DPRINTF(MemDepUnit, "Memory dependence entries: %i\n", MemDepEntry::memdep_count);
 #endif
 }
 

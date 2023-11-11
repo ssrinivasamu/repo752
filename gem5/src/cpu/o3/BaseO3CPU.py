@@ -63,6 +63,14 @@ class BaseO3CPU(BaseCPU):
     type = "BaseO3CPU"
     cxx_class = "gem5::o3::CPU"
     cxx_header = "cpu/o3/dyn_inst.hh"
+    
+    delayCtrlSpecLoad = Param.Bool(
+        False, "Enable/Disable Load Delay"
+    )
+
+    delayTaintedLoad = Param.Bool(
+        False, "Enable/Disable Tainted Load Delay"
+    )
 
     @classmethod
     def memory_mode(cls):

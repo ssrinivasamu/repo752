@@ -569,6 +569,7 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
     } else {
         iqIOStats.intInstQueueWrites++;
     }
+    
     // Make sure the instruction is valid
     assert(new_inst);
 
@@ -598,6 +599,12 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
     }
 
     ++iqStats.instsAdded;
+
+    if((memDepUnit[new_inst->threadNumber].delayCtrlSpecLoad) || (memDepUnit[new_inst->threadNumber].delayTaintedLoad)){
+        if(new_inst->isCondCtrl()){
+            memDepUnit[new_inst->threadNumber].BranchInsert(new_inst->seqNum);
+        }
+    }
 
     count[new_inst->threadNumber]++;
 
@@ -1000,6 +1007,11 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
         // Completes a non mem ref barrier
         memDepUnit[tid].completeInst(completed_inst);
     }
+    if((memDepUnit[tid].delayCtrlSpecLoad) || (memDepUnit[tid].delayTaintedLoad)){
+        if(completed_inst->isCondCtrl()){
+            memDepUnit[tid].BranchResolve(completed_inst->seqNum);
+        }
+    }
 
     for (int dest_reg_idx = 0;
          dest_reg_idx < completed_inst->numDestRegs();
@@ -1044,6 +1056,11 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
             // ready.  However that would mean that the dependency
             // graph entries would need to hold the src_reg_idx.
             dep_inst->markSrcRegReady();
+
+            if(memDepUnit[tid].delayTaintedLoad){
+                //Propagate the taint to the dependent instruction:
+                dep_inst->InstrTaint(completed_inst->IsInstrTainted());
+            }
 
             addIfReady(dep_inst);
 
@@ -1282,13 +1299,7 @@ InstructionQueue::doSquash(ThreadID tid)
                 }
             }
 
-            // Might want to also clear out the head of the dependency graph.
-
-            // Mark it as squashed within the IQ.
-            squashed_inst->setSquashedInIQ();
-
-            // @todo: Remove this hack where several statuses are set so the
-            // inst will flow through the rest of the pipeline.
+            // Might want tsrc/cpu/o3/lsq.ccow through the rest of the pipeline.
             squashed_inst->setIssued();
             squashed_inst->setCanCommit();
             squashed_inst->clearInIQ();
@@ -1320,6 +1331,13 @@ InstructionQueue::doSquash(ThreadID tid)
         }
         instList[tid].erase(squash_it--);
         ++iqStats.squashedInstsExamined;
+
+        //If the squashed instruction is a BR, we need to remove it from our outstanding branch queue
+        if((memDepUnit[squashed_inst->threadNumber].delayCtrlSpecLoad) || (memDepUnit[squashed_inst->threadNumber].delayTaintedLoad)){
+            if(squashed_inst->isCondCtrl()){
+                memDepUnit[squashed_inst->threadNumber].BranchRemove(squashed_inst->seqNum);
+            }
+        }
     }
 }
 

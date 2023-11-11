@@ -158,6 +158,14 @@ class MemDepUnit
     /** Issues the given instruction */
     void issue(const DynInstPtr &inst);
 
+    /*Outst branch tracking*/
+    bool delayCtrlSpecLoad;
+    bool delayTaintedLoad;
+    std::set<uint64_t> OutstBranch;
+    void BranchInsert(uint64_t seqNum);
+    void BranchRemove(uint64_t seqNum);
+    void BranchResolve(uint64_t seqNum);
+
     /** Debugging function to dump the lists of instructions. */
     void dumpLists();
 

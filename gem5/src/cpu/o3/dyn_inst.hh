@@ -187,6 +187,8 @@ class DynInst : public ExecContext, public RefCounted
         ReqMade,
         MemOpDone,
         HtmFromTransaction,
+        WaitBrResolve,
+        InstrTainted,
         MaxFlags
     };
 
@@ -381,7 +383,15 @@ class DynInst : public ExecContext, public RefCounted
     bool notAnInst() const { return instFlags[NotAnInst]; }
     void setNotAnInst() { instFlags[NotAnInst] = true; }
 
+    /*Function that sets Wait when there is a Branch Resolve pending*/
+    bool IsWaitBrResolve() {return instFlags[WaitBrResolve];}
+    void setWaitBrResolve() {instFlags[WaitBrResolve] = true;}
+    void clearWaitBrResolve() {instFlags[WaitBrResolve]= false;}
 
+    /*Functions that handle tainting of speculative loads*/
+    bool IsInstrTainted() {return instFlags[InstrTainted];}
+    void InstrTaint(bool taint) {instFlags[InstrTainted] = taint;}
+   
     ////////////////////////////////////////////
     //
     // INSTRUCTION EXECUTION

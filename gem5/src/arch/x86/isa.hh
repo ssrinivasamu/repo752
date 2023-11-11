@@ -69,6 +69,7 @@ class ISA : public BaseISA
     }
 
     using Params = X86ISAParams;
+    bool fuzzTSC;
 
     ISA(const Params &p);
 
@@ -84,7 +85,7 @@ class ISA : public BaseISA
         HandyM5Reg m5reg = readMiscRegNoEffect(misc_reg::M5Reg);
         return m5reg.cpl == 3;
     }
-
+    
     void copyRegsFrom(ThreadContext *src) override;
 
     void serialize(CheckpointOut &cp) const override;
