@@ -1276,7 +1276,7 @@ InstructionQueue::doSquash(ThreadID tid)
                 }
 
             } else if (!squashed_inst->isStoreConditional() ||
-                       !squashed_inst->isCompleted()) {
+                       !squashed_inst->isCompleted()) { 
                 NonSpecMapIt ns_inst_it =
                     nonSpecInsts.find(squashed_inst->seqNum);
 
@@ -1299,7 +1299,12 @@ InstructionQueue::doSquash(ThreadID tid)
                 }
             }
 
-            // Might want tsrc/cpu/o3/lsq.ccow through the rest of the pipeline.
+            // Might want to also clear out the head of the dependency graph.
+            // Mark it as squashed within the IQ.
+            squashed_inst->setSquashedInIQ();
+
+            // @todo: Remove this hack where several statuses are set so the
+            // inst will flow through the rest of the pipeline.
             squashed_inst->setIssued();
             squashed_inst->setCanCommit();
             squashed_inst->clearInIQ();
