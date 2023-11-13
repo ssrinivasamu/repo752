@@ -1111,6 +1111,11 @@ class Request : public Extensible<Request>
     bool isCacheClean() const { return _flags.isSet(CLEAN); }
     bool isCacheInvalidate() const { return _flags.isSet(INVALIDATE); }
     bool isCacheMaintenance() const { return _flags.isSet(CLEAN|INVALIDATE); }
+    //Function to invalidate the cache
+    /*void setInvalidateFlag()  { 
+        _flags.set((Flags)CLEAN);
+        _flags.set((Flags)INVALIDATE);
+    }*/
     /** @} */
 };
 

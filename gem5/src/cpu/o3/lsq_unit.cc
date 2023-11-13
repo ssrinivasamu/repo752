@@ -952,9 +952,25 @@ LSQUnit::squash(const InstSeqNum &squashed_num)
             DPRINTF(HtmCpu, ">> htmStarts (%d) : htmStops-- (%d)\n",
               htmStarts, htmStops);
         }
+
+        //before the loadreq is popped, compute the address and send an invalidate to the cache
+        /*Addr inv_req_addr = loadQueue.back().instruction()->physEffAddr;
+        DPRINTF(MemDepUnit, "Load Addr %#x\n", inv_req_addr);
+        //create the pkt
+        RequestPtr reqPtr;
+        reqPtr->setInvalidateFlag();
+        reqPtr->setPaddr(inv_req_addr);
+        PacketPtr pkt = Packet::createWrite(reqPtr);
+        if (!dcachePort->sendTimingReq(pkt)) {
+            DPRINTF(MemDepUnit, "Couldn't send SQUASHED LOAD INVALIDATE REQUEST message[sn:%lli]\n", loadQueue.back().instruction()->seqNum);
+        } else {
+            DPRINTF(MemDepUnit, "YAYYYYY, invalidated cache! Congrats!! Load seqnum [sn:%lli]\n", loadQueue.back().instruction()->seqNum);
+        }*/
+
         // Clear the smart pointer to make sure it is decremented.
         loadQueue.back().instruction()->setSquashed();
         loadQueue.back().clear();
+
 
         loadQueue.pop_back();
         ++stats.squashedLoads;
